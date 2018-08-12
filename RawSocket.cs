@@ -3,32 +3,44 @@ using System.Net;
 using System.Net.Sockets;
 using System.Runtime.InteropServices;
 
-namespace PacketSniffer.NET
+namespace PacketSnifferNET
 {
     [StructLayout(LayoutKind.Explicit)]
     public struct IPHeader
     {
-        [FieldOffset(0)] public byte ip_verlen; 
-        [FieldOffset(1)] public byte ip_tos; 
-        [FieldOffset(2)] public ushort ip_totallength; 
-        [FieldOffset(4)] public ushort ip_id; 
-        [FieldOffset(6)] public ushort ip_offset; 
+        [FieldOffset(0)] public byte ip_verlen;
+        [FieldOffset(1)] public byte ip_tos;
+        [FieldOffset(2)] public ushort ip_totallength;
+        [FieldOffset(4)] public ushort ip_id;
+        [FieldOffset(6)] public ushort ip_offset;
         [FieldOffset(8)] public byte ip_ttl;
-        [FieldOffset(9)] public byte ip_protocol; 
-        [FieldOffset(10)] public ushort ip_checksum; 
-        [FieldOffset(12)] public uint ip_srcaddr; 
-        [FieldOffset(16)] public uint ip_destaddr; 
+        [FieldOffset(9)] public byte ip_protocol;
+        [FieldOffset(10)] public ushort ip_checksum;
+        [FieldOffset(12)] public uint ip_srcaddr;
+        [FieldOffset(16)] public uint ip_destaddr;
+    }
+
+    public static class OperatingSystem
+    {
+        public static bool IsWindows() =>
+            RuntimeInformation.IsOSPlatform(OSPlatform.Windows);
+
+        public static bool IsMacOS() =>
+            RuntimeInformation.IsOSPlatform(OSPlatform.OSX);
+
+        public static bool IsLinux() =>
+            RuntimeInformation.IsOSPlatform(OSPlatform.Linux);
     }
 
     public class RawSocket
     {
-        private bool error_occurred; 
-        public bool KeepRunning; 
-        private static int len_receive_buf; 
-        byte[] receive_buf_bytes;  
-        private Socket socket = null; 
+        private bool error_occurred;
+        public bool KeepRunning;
+        private static int len_receive_buf;
+        byte[] receive_buf_bytes;
+        private Socket socket = null;
         const int SIO_RCVALL = unchecked((int)0x98000001);
-        const int ETH_P_ALL = 0x0003;  
+        const int ETH_P_ALL = 0x0003;
 
         public class PacketArrivedEventArgs : EventArgs
         {
@@ -126,7 +138,7 @@ namespace PacketSniffer.NET
 
         public event PacketArrivedEventHandler PacketArrival;
         public delegate void PacketArrivedEventHandler(Object sender, PacketArrivedEventArgs args);
-        
+
         protected virtual void OnPacketArrival(PacketArrivedEventArgs e)
         {
             PacketArrival?.Invoke(this, e);
@@ -148,35 +160,27 @@ namespace PacketSniffer.NET
         /// <param name="IP"></param>
         /// <param name="port"></param>
         /// <param name="protocal"></param>
-        public void CreateAndBindSocket(string IP, int port = 0, ProtocolType protocal = ProtocolType.IP) 
+        public void CreateAndBindSocket(string IP, int port = 0, ProtocolType protocal = ProtocolType.IP)
         {
-            if (Environment.OSVersion.Platform == PlatformID.Unix)
-                socket = new Socket(AddressFamily.InterNetwork, SocketType.Raw, protocal == ProtocolType.IP ? ProtocolType.Tcp : protocal);
-            else
-                socket = new Socket(AddressFamily.InterNetwork, SocketType.Raw, protocal);
+            socket = new Socket(AddressFamily.InterNetwork, SocketType.Raw, protocal);
 
-            socket.Blocking = false; 
-            socket.Bind(new IPEndPoint(IPAddress.Parse(IP), port)); 
+            socket.Blocking = false;
+            socket.Bind(new IPEndPoint(IPAddress.Parse(IP), port));
 
             if (SetSocketOption() == false) error_occurred = true;
         }
 
-        private bool SetSocketOption() 
+        private bool SetSocketOption()
         {
             bool ret_value = true;
             try
             {
                 socket.SetSocketOption(SocketOptionLevel.IP, SocketOptionName.HeaderIncluded, 1);
 
-                if (Environment.OSVersion.Platform == PlatformID.Unix)
-                    return ret_value;
-
-                //Below code is ONLY for Win32 systems.
-
                 byte[] IN = new byte[4] { 1, 0, 0, 0 };
                 byte[] OUT = new byte[4];
 
-                
+
                 int ret_code = socket.IOControl(SIO_RCVALL, IN, OUT);
                 ret_code = OUT[0] + OUT[1] + OUT[2] + OUT[3];
                 if (ret_code != 0) ret_value = false;
@@ -228,7 +232,7 @@ namespace PacketSniffer.NET
                 temp_version = (uint)(head->ip_verlen & 0xF0) >> 4;
                 e.IPVersion = temp_version.ToString();
 
-                
+
                 temp_ip_srcaddr = head->ip_srcaddr;
                 temp_ip_destaddr = head->ip_destaddr;
                 temp_ip = new IPAddress(temp_ip_srcaddr);
@@ -245,12 +249,12 @@ namespace PacketSniffer.NET
                 e.MessageLength = (uint)len - e.HeaderLength;
 
                 e.ReceiveBuffer = buf;
-                
+
                 Array.Copy(buf, 0, e.IPHeaderBuffer, 0, (int)e.HeaderLength);
-                
+
                 Array.Copy(buf, (int)e.HeaderLength, e.MessageBuffer, 0, (int)e.MessageLength);
             }
-            
+
             OnPacketArrival(e);
         }
 
@@ -258,7 +262,6 @@ namespace PacketSniffer.NET
         public void Run()
         {
             IAsyncResult ar = socket.BeginReceive(receive_buf_bytes, 0, len_receive_buf, SocketFlags.None, new AsyncCallback(CallReceive), this);
-
         }
 
         //Async Callback
